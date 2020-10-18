@@ -1,24 +1,33 @@
 <resources>
     <string name="app_name">Tap, Tap</string>
+    <string name="accessibility_service_label">Tap, Tap</string>
+    <string name="accessibility_service_label_gesture">Tap, Tap Serviço Secundário</string>
     <string name="accessibility_service_description">Serviço de Acessibilidade do TapTap\n\n<b>Aviso Importante: Nenhum dado de seus aplicativos será coletado, este serviço é utilizado simplesmente para manter o reconhecimento do gesto ativo e providenciar a interação com o seu dispositivo</b></string>
+    <string name="accessibility_service_description_gesture">Serviço de Acessibilidade do TapTap\n\n<b>Aviso Importante: Nenhum dado de seus aplicativos será coletado, este serviço é utilizado simplesmente para manter o reconhecimento do gesto ativo e providenciar a interação com o seu dispositivo.\n\nEste é um serviço separado devido à forma como o Android funciona e como os aplicativos adaptam sua IU quando serviços que podem realizar gestos estão ativados. Por exemplo, o Chrome não ocultará o barra de endereço na rolagem com este serviço habilitado.</b></string>
     <string name="toast_no_action_selected">Nenhuma ação selecionada</string>
     <string name="launch_accessibility">Abrir o menu de Acessibilidade</string>
     <string name="setting_gesture">Gesto</string>
-    <string name="setting_gesture_desc">Ajustar como o gesto funciona</string>
+    <string name="setting_gesture_desc">Configurar como o gesto funciona</string>
     <string name="setting_actions">Ações</string>
+    <string name="setting_actions_double">Ações de Toque Duplo</string>
+    <string name="setting_actions_triple">Ações de Toque Triplo</string>
+    <string name="settings_actions_desc_double">Defina as ações a serem executadas quando você toca na parte de trás do seu dispositivo duas vezes</string>
+    <string name="settings_actions_desc_triple">Defina as ações a serem executadas quando você tocar na parte de trás do seu dispositivo três vezes</string>
     <string name="setting_gates">Barreiras</string>
     <string name="setting_gates_desc">Definir situações em que o gesto não deve executar uma ação</string>
     <string name="setting_feedback">Feedback</string>
     <string name="setting_feedback_desc">Definir como o dispositivo irá te avisar quando o gesto é executado</string>
+    <string name="setting_gesture_model">Tamanho do Dispositivo</string>
+    <string name="setting_gesture_model_desc">Ajuste o tamanho do dispositivo a ser usado ao selecionar o modelo de gesto.</string>
     <string name="setting_feedback_vibrate">Vibrar</string>
     <string name="setting_feedback_vibrate_desc">Vibrar quando o gesto é realizado e a ação é executada</string>
     <string name="setting_feedback_wake">Acordar Dispositivo</string>
     <string name="setting_feedback_wake_desc">Ligar a tela do dispositivo caso esteja desligada (aviso: isso vai interferir ações que desligam a tela!)</string>
 
     <string-array name="device_model_keys">
-        <item>Pixel 3 XL</item>
-        <item>Pixel 4</item>
-        <item>Pixel 4 XL</item>
+        <item>Maior</item>
+        <item>Mediano</item>
+        <item>Menor</item>
     </string-array>
 
     <!-- Gates -->
