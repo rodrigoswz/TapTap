@@ -3,11 +3,16 @@ package com.kieronquinn.app.taptap.fragments.bottomsheets
 import android.Manifest
 import android.animation.ValueAnimator
 import android.app.Activity
+import android.app.NotificationManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -27,18 +32,19 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.kieronquinn.app.taptap.R
 import com.kieronquinn.app.taptap.activities.AppPickerActivity
+import com.kieronquinn.app.taptap.activities.SettingsActivity
 import com.kieronquinn.app.taptap.fragments.AppsFragment
-import com.kieronquinn.app.taptap.fragments.SettingsActionFragment
+import com.kieronquinn.app.taptap.fragments.BaseActionFragment
 import com.kieronquinn.app.taptap.fragments.action.ActionListFragment
 import com.kieronquinn.app.taptap.models.ActionInternal
 import com.kieronquinn.app.taptap.models.ActionDataTypes
-import com.kieronquinn.app.taptap.utils.animateColorChange
-import com.kieronquinn.app.taptap.utils.animateElevationChange
-import com.kieronquinn.app.taptap.utils.dip
-import com.kieronquinn.app.taptap.utils.isDarkTheme
+import com.kieronquinn.app.taptap.services.TapAccessibilityService
+import com.kieronquinn.app.taptap.services.TapGestureAccessibilityService
+import com.kieronquinn.app.taptap.utils.*
 import dev.chrisbanes.insetter.Insetter
 import kotlinx.android.synthetic.main.fragment_bottomsheet_action.*
 import net.dinglisch.android.tasker.TaskerIntent
+import java.lang.RuntimeException
 
 class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnDestinationChangedListener {
 
@@ -46,10 +52,34 @@ class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnD
         private const val REQUEST_CODE_SELECT_APP = 1001
         private const val REQUEST_CODE_PERMISSION = 1002
         private const val REQUEST_CODE_TASKER_ACTION = 1003
+        private const val REQUEST_CODE_SHORTCUT = 1004
+        private const val REQUEST_CODE_SHORTCUT_SECOND = 1005
+    }
+
+    private val isNotificationAccessGranted: Boolean
+        get() {
+            val notificationManager = requireContext().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            return notificationManager.isNotificationPolicyAccessGranted
+        }
+
+    private var isWaitingForAccessibility = false
+
+    private val returnReceiver = object: BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent) {
+            context?.unregisterReceiverOpt(this)
+            try {
+                startActivity(Intent(context, SettingsActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                })
+            }catch (e: RuntimeException){
+                //Fragment isn't attached
+            }
+        }
     }
 
     private var storedAction: ActionInternal? = null
     private var storedActionCallback: ((ActionInternal) -> Unit)? = null
+    private var isWaitingForNotificationPermission = false
 
     private val navHostFragment by lazy {
         childFragmentManager.findFragmentById(R.id.bs_nav_host_fragment) as NavHostFragment
@@ -135,14 +165,14 @@ class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnD
                             checkTaskerAccessPermission()
                         }
                         val bundle = Bundle()
-                        bundle.putParcelable(SettingsActionFragment.addResultKey, completedAction)
-                        setFragmentResult(SettingsActionFragment.addResultKey, bundle)
+                        bundle.putParcelable(BaseActionFragment.addResultKey, completedAction)
+                        setFragmentResult(BaseActionFragment.addResultKey, bundle)
                         dismiss()
                     }
                 }else {
                     val bundle = Bundle()
-                    bundle.putParcelable(SettingsActionFragment.addResultKey, action)
-                    setFragmentResult(SettingsActionFragment.addResultKey, bundle)
+                    bundle.putParcelable(BaseActionFragment.addResultKey, action)
+                    setFragmentResult(BaseActionFragment.addResultKey, bundle)
                     dismiss()
                 }
             }
@@ -152,7 +182,7 @@ class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnD
     private fun checkTaskerAccessPermission() {
         if(TaskerIntent.testStatus(context) == TaskerIntent.Status.AccessBlocked){
             //User does not have Misc > Allow External Access enabled
-            TaskerPermissionBottomSheetFragment().show(parentFragmentManager, "bs_tasker")
+            MaterialBottomSheetDialogFragment.create(TaskerPermissionBottomSheetFragment(), childFragmentManager, "bs_tasker"){}
         }
     }
 
@@ -182,25 +212,104 @@ class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnD
                     storedAction = null
                 }
             }
+            ActionDataTypes.SHORTCUT -> {
+                launchShortcutPicker(action, callback)
+            }
+            ActionDataTypes.ACCESS_NOTIFICATION_POLICY -> {
+                if(!isNotificationAccessGranted) {
+                    isWaitingForNotificationPermission = true
+                    MaterialBottomSheetDialogFragment.create(NotificationPolicyBottomSheetFragment(), childFragmentManager, "bs_notification_policy"){}
+                }else{
+                    callback.invoke(action)
+                    storedActionCallback = null
+                    storedAction = null
+                }
+            }
+            ActionDataTypes.SECONDARY_GESTURE_SERVICE -> {
+                if(!isAccessibilityServiceEnabled(requireContext(), TapGestureAccessibilityService::class.java)){
+                    isWaitingForAccessibility = true
+                    MaterialBottomSheetDialogFragment.create(SecondaryServiceBottomSheetFragment(), childFragmentManager, "bs_secondary_service"){}
+                }else{
+                    callback.invoke(action)
+                    storedActionCallback = null
+                    storedAction = null
+                }
+            }
         }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if(requestCode == REQUEST_CODE_SELECT_APP && resultCode == Activity.RESULT_OK){
+        val result: Boolean = if(requestCode == REQUEST_CODE_SELECT_APP && resultCode == Activity.RESULT_OK){
             val currentAction = storedAction ?: return
             val packageName = data?.getStringExtra(AppsFragment.KEY_SELECTED_APP)
             if(packageName.isNullOrEmpty()) return
             currentAction.data = packageName
             storedActionCallback?.invoke(currentAction)
+            true
         }else if(requestCode == REQUEST_CODE_TASKER_ACTION && resultCode == Activity.RESULT_OK){
             val currentAction = storedAction ?: return
             val taskName = data?.dataString ?: return
             currentAction.data = taskName
             storedActionCallback?.invoke(currentAction)
+            true
+        }else if(requestCode == REQUEST_CODE_SHORTCUT && resultCode == Activity.RESULT_OK){
+            if(data?.component != null){
+                //Handle the required extra step
+                startActivityForResult(data, REQUEST_CODE_SHORTCUT_SECOND)
+                false
+            }else {
+                handleShortcutIntent(data)
+                true
+            }
+        }else if(requestCode == REQUEST_CODE_SHORTCUT_SECOND && resultCode == Activity.RESULT_OK){
+            handleShortcutIntent(data)
+            true
+        }else false
+        if(result) {
+            storedActionCallback = null
+            storedAction = null
         }
-        storedActionCallback = null
-        storedAction = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        requireContext().registerReceiver(returnReceiver, IntentFilter(TapAccessibilityService.KEY_ACCESSIBILITY_START))
+        //startActivityForResult & onActivityResult don't seem to work for the policy permissions screen as it fires off a second activity and thus briefly returns to the app before it's done
+        if((isWaitingForNotificationPermission && isNotificationAccessGranted) || (isWaitingForAccessibility && isAccessibilityServiceEnabled(requireContext(), TapGestureAccessibilityService::class.java))){
+            val storedAction = this.storedAction ?: return
+            storedActionCallback?.invoke(storedAction)
+            this.storedAction = null
+            storedActionCallback = null
+            isWaitingForNotificationPermission = false
+            isWaitingForAccessibility = false
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if(!isWaitingForAccessibility) requireContext().unregisterReceiverOpt(returnReceiver)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        requireContext().unregisterReceiverOpt(returnReceiver)
+    }
+
+    private fun handleShortcutIntent(data: Intent?) {
+        val returnedIntent = data?.getParcelableExtra<Intent>(Intent.EXTRA_SHORTCUT_INTENT)
+        val currentAction = storedAction ?: return
+        val serializedIntent = returnedIntent?.serialize()
+        if (serializedIntent != null) {
+            currentAction.data = serializedIntent
+            storedActionCallback?.invoke(currentAction)
+        } else {
+            Toast.makeText(
+                context,
+                getString(R.string.action_launch_shortcut_toast),
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -241,6 +350,15 @@ class ActionBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnD
 
     private fun onBackPressed(){
         if(!navController.navigateUp()) dismiss()
+    }
+
+    private fun launchShortcutPicker(action: ActionInternal, callback: (ActionInternal) -> Unit){
+        storedAction = action
+        storedActionCallback = callback
+        val intent = Intent(Intent.ACTION_PICK_ACTIVITY).apply {
+            putExtra(Intent.EXTRA_INTENT, Intent(Intent.ACTION_CREATE_SHORTCUT))
+        }
+        startActivityForResult(intent, REQUEST_CODE_SHORTCUT)
     }
 
     private var isToolbarElevationEnabled = false

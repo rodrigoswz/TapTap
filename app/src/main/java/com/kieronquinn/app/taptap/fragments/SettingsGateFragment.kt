@@ -11,13 +11,16 @@ import androidx.transition.TransitionManager
 import com.kieronquinn.app.taptap.R
 import com.kieronquinn.app.taptap.adapters.GateAdapter
 import com.kieronquinn.app.taptap.fragments.bottomsheets.GateBottomSheetFragment
-import com.kieronquinn.app.taptap.fragments.bottomsheets.GenericBottomSheetFragment
+import com.kieronquinn.app.taptap.fragments.bottomsheets.MaterialBottomSheetDialogFragment
 import com.kieronquinn.app.taptap.models.GateInternal
 import com.kieronquinn.app.taptap.models.store.GateListFile
 import com.kieronquinn.app.taptap.utils.animateBackgroundStateChange
+import com.kieronquinn.app.taptap.utils.fadeIn
+import com.kieronquinn.app.taptap.utils.fadeOut
 import com.kieronquinn.app.taptap.utils.sharedPreferences
 import dev.chrisbanes.insetter.applySystemWindowInsetsToMargin
 import kotlinx.android.synthetic.main.fragment_gates.*
+import kotlinx.android.synthetic.main.fragment_gates.recycler_view
 
 class SettingsGateFragment : BaseFragment(), GateAdapter.GateCallback {
 
@@ -60,7 +63,21 @@ class SettingsGateFragment : BaseFragment(), GateAdapter.GateCallback {
         super.onViewCreated(view, savedInstanceState)
         setHasOptionsMenu(true)
         recyclerView.layoutManager = LinearLayoutManager(context)
-        val adapter = GateAdapter(recyclerView.context, gates, false, this)
+        val adapter = GateAdapter(recyclerView.context, gates, false, this).apply {
+            listChangeListener = {
+                if(it > 0){
+                    if(recyclerView.visibility != View.VISIBLE){
+                        empty_state.fadeOut{}
+                        recyclerView.fadeIn{}
+                    }
+                }else{
+                    if(recyclerView.visibility == View.VISIBLE){
+                        recyclerView.fadeOut {}
+                        empty_state.fadeIn{}
+                    }
+                }
+            }
+        }
         recyclerView.adapter = adapter
         fab.applySystemWindowInsetsToMargin(bottom = true)
         fab.post {
@@ -77,6 +94,10 @@ class SettingsGateFragment : BaseFragment(), GateAdapter.GateCallback {
             val newItem = bundle.get(addResultKey) as GateInternal
             gates.add(newItem)
             recyclerView.adapter?.notifyItemInserted(gates.size)
+            recyclerView.adapter?.run {
+                this as GateAdapter
+                notifyListener()
+            }
             recyclerView?.layoutManager?.scrollToPosition(gates.size - 1)
             saveToFile()
         }
@@ -138,7 +159,10 @@ class SettingsGateFragment : BaseFragment(), GateAdapter.GateCallback {
     }
 
     private fun showHelpBottomSheet(){
-        GenericBottomSheetFragment.create(getString(R.string.bs_help_gate), R.string.bs_help_gate_title, android.R.string.ok).show(childFragmentManager, "bs_help")
+        MaterialBottomSheetDialogFragment.create(MaterialBottomSheetDialogFragment(), childFragmentManager, "bs_help") {
+            it.title(R.string.bs_help_gate_title)
+            it.message(R.string.bs_help_gate)
+        }
         sharedPreferences?.edit()?.putBoolean(PREF_KEY_GATE_HELP_SHOWN, true)?.apply()
     }
 

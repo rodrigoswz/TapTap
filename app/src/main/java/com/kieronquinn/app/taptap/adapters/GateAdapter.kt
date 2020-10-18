@@ -1,8 +1,6 @@
 package com.kieronquinn.app.taptap.adapters
 
 import android.content.Context
-import android.content.res.ColorStateList
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,23 +8,28 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.kieronquinn.app.taptap.R
-import com.kieronquinn.app.taptap.models.ActionDataTypes
-import com.kieronquinn.app.taptap.models.ActionInternal
 import com.kieronquinn.app.taptap.models.GateDataTypes
 import com.kieronquinn.app.taptap.models.GateInternal
+import com.kieronquinn.app.taptap.utils.getFormattedDataForGate
 import kotlinx.android.synthetic.main.item_gate.view.*
 
-class GateAdapter(private val context: Context, private val items: MutableList<GateInternal>, private val isAdd: Boolean = false, private val listener: GateCallback) : RecyclerView.Adapter<GateAdapter.ViewHolder>() {
+class GateAdapter(private val context: Context, private val items: MutableList<GateInternal>, private val isAdd: Boolean = false, private val listener: GateCallback, private val isWhenGate: Boolean = false) : RecyclerView.Adapter<GateAdapter.ViewHolder>() {
 
     private var currentlySelectedPosition = -1
 
     val isItemSelected
         get() = currentlySelectedPosition != -1
 
+    var listChangeListener: ((Int) -> Unit)? = null
+
     interface GateCallback {
         fun onGateChange(gates: List<GateInternal>)
         fun onGateSelected()
         fun onGateDeselected()
+    }
+
+    fun notifyListener(){
+        listChangeListener?.invoke(itemCount)
     }
 
     private val layoutInflater by lazy {
@@ -41,6 +44,11 @@ class GateAdapter(private val context: Context, private val items: MutableList<G
         return items.size
     }
 
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        notifyListener()
+    }
+
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = items[position]
         holder.itemView as CardView
@@ -51,10 +59,16 @@ class GateAdapter(private val context: Context, private val items: MutableList<G
                 setCardBackgroundColor(ContextCompat.getColor(context, R.color.card_background))
             }
             item_gate_name.text = context.getString(item.gate.nameRes)
+            val descriptionRes = if(isWhenGate) item.gate.whenDescriptionRes else item.gate.descriptionRes
             if(item.gate.formattableDescription != null && item.data != null){
-                item_gate_description.text = getFormattedDescriptionForGate(item) ?: context.getString(item.gate.descriptionRes)
+                getFormattedDataForGate(context, item.gate, item.data)?.let {
+                    item_gate_description.text = context.getString(item.gate.formattableDescription, it)
+                } ?: run {
+                    item_gate_description.text = context.getText(descriptionRes)
+                }
+
             }else{
-                item_gate_description.text = context.getString(item.gate.descriptionRes)
+                item_gate_description.text = context.getText(descriptionRes)
             }
             item_gate_icon.setImageResource(item.gate.iconRes)
             if(isAdd){
@@ -106,22 +120,12 @@ class GateAdapter(private val context: Context, private val items: MutableList<G
         currentlySelectedPosition = -1
         listener.onGateDeselected()
         listener.onGateChange(items)
+        notifyListener()
     }
 
     fun deselectItem() {
         setItemSelected(-1)
         listener.onGateDeselected()
-    }
-
-    private fun getFormattedDescriptionForGate(item: GateInternal): CharSequence? {
-        val formattedText = when(item.gate.dataType){
-            GateDataTypes.PACKAGE_NAME -> {
-                val applicationInfo = context.packageManager.getApplicationInfo(item.data, 0)
-                applicationInfo.loadLabel(context.packageManager)
-            }
-            else -> null
-        } ?: return null
-        return context.getString(item.gate.formattableDescription!!, formattedText)
     }
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view)

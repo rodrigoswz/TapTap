@@ -26,6 +26,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.kieronquinn.app.taptap.R
 import com.kieronquinn.app.taptap.activities.AppPickerActivity
 import com.kieronquinn.app.taptap.fragments.AppsFragment
+import com.kieronquinn.app.taptap.fragments.BaseActionFragment
 import com.kieronquinn.app.taptap.fragments.SettingsGateFragment
 import com.kieronquinn.app.taptap.fragments.gate.GateListFragment
 import com.kieronquinn.app.taptap.models.ActionDataTypes
@@ -54,6 +55,11 @@ class GateBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnDes
 
     private val navController by lazy {
         navHostFragment.navController
+    }
+
+    private val resultKey by lazy {
+        if(arguments?.containsKey(GateListFragment.KEY_PASSED_GATES) == true) BaseActionFragment.addResultKeyGate
+        else SettingsGateFragment.addResultKey
     }
 
     override fun getTheme(): Int {
@@ -93,6 +99,7 @@ class GateBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnDes
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        navController.setGraph(R.navigation.nav_graph_gate_add, arguments)
         navController.addOnDestinationChangedListener(this)
         bs_toolbar.apply {
             navigationIcon = ContextCompat.getDrawable(context, R.drawable.ic_close)
@@ -124,19 +131,20 @@ class GateBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnDes
                 setToolbarElevationEnabled(elevationEnabled)
             }
             it.setItemClickListener { gate ->
+                gate.isActivated = true
                 val dataType = gate.gate.dataType
                 if(dataType != null){
                     //Fire off to data picker
                     launchDataPicker(gate, dataType){ completedGate ->
                         val bundle = Bundle()
-                        bundle.putParcelable(SettingsGateFragment.addResultKey, completedGate)
-                        setFragmentResult(SettingsGateFragment.addResultKey, bundle)
+                        bundle.putParcelable(resultKey, completedGate)
+                        setFragmentResult(resultKey, bundle)
                         dismiss()
                     }
                 }else {
                     val bundle = Bundle()
-                    bundle.putParcelable(SettingsGateFragment.addResultKey, gate)
-                    setFragmentResult(SettingsGateFragment.addResultKey, bundle)
+                    bundle.putParcelable(resultKey, gate)
+                    setFragmentResult(resultKey, bundle)
                     dismiss()
                 }
             }
@@ -172,7 +180,7 @@ class GateBottomSheetFragment : BottomSheetDialogFragment(), NavController.OnDes
         when(dataTypes){
             GateDataTypes.PACKAGE_NAME -> {
                 startActivityForResult(
-                    Intent(requireContext(), AppPickerActivity::class.java),
+                    Intent(requireContext(), AppPickerActivity::class.java).putExtra(AppsFragment.KEY_SHOW_ALL, true),
                     REQUEST_CODE_SELECT_APP
                 )
             }

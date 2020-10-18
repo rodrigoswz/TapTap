@@ -1,3 +1,10 @@
+# Columbus module, which contains Smali and compilation logic that becomes columbus.jar. This won't be uploaded to GitHub (publicly anyway) as the code isn't in AOSP (yet?)
+/columbus
+
+# OS files
+.DS_Store
+._.DS_Store
+
 # Built application files
 *.apk
 *.ap_
@@ -13,8 +20,7 @@
 bin/
 gen/
 out/
-#  Uncomment the following line in case you need and you don't have the release build type files in your app
-# release/
+release/
 
 # Gradle files
 .gradle/
@@ -81,3 +87,4 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+.idea/codeStyles/codeStyleConfig.xml

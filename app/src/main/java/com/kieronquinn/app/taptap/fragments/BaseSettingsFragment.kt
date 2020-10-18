@@ -9,8 +9,11 @@ import androidx.preference.SwitchPreference
 import com.kieronquinn.app.taptap.R
 import com.kieronquinn.app.taptap.activities.SettingsActivity
 import com.kieronquinn.app.taptap.preferences.Preference
+import com.kieronquinn.app.taptap.preferences.SliderPreference
 import com.kieronquinn.app.taptap.utils.SHARED_PREFERENCES_NAME
 import com.kieronquinn.app.taptap.utils.getToolbarHeight
+import com.kieronquinn.app.taptap.utils.isMainEnabled
+import com.kieronquinn.app.taptap.utils.isTripleTapEnabled
 import dev.chrisbanes.insetter.applySystemWindowInsetsToPadding
 import kotlinx.android.synthetic.main.activity_settings.*
 
@@ -24,12 +27,28 @@ abstract class BaseSettingsFragment : PreferenceFragmentCompat(), View.OnScrollC
         super.onViewCreated(view, savedInstanceState)
         listView.applySystemWindowInsetsToPadding(top = true, bottom = true, left = true, right = true)
         listView.post {
-            listView.setPadding(listView.paddingLeft, listView.paddingTop + (context?.getToolbarHeight() ?: 0), listView.paddingRight, listView.paddingBottom)
+            val topPadding = if(this is SettingsFragment) ((context?.getToolbarHeight() ?: 0) * 2) + resources.getDimension(R.dimen.margin_small).toInt()
+            else context?.getToolbarHeight()
+            listView.setPadding(listView.paddingLeft, listView.paddingTop + (topPadding ?: 0), listView.paddingRight, listView.paddingBottom)
             listView.setOnScrollChangeListener(this)
             listView.overScrollMode = View.OVER_SCROLL_NEVER
             listView.smoothScrollToPosition( 0)
         }
         setToolbarElevationEnabled(false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (activity as? SettingsActivity)?.run {
+            if(this@BaseSettingsFragment is SettingsFragment){
+                setSwitchVisible(true)
+                setSwitchTag(SettingsActivity.TAG_SWITCH_MAIN)
+                setSwitchChecked(isMainEnabled)
+                setSwitchText(R.string.switch_main)
+            }else{
+                setSwitchVisible(false)
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,14 +70,6 @@ abstract class BaseSettingsFragment : PreferenceFragmentCompat(), View.OnScrollC
 
     override fun onScrollChange(v: View?, scrollX: Int, scrollY: Int, oldScrollX: Int, oldScrollY: Int) {
         setToolbarElevationEnabled(listView.computeVerticalScrollOffset() > 0)
-    }
-
-    fun getPreference(key: String, invoke: (Preference) -> Unit) {
-        findPreference<Preference>(key)?.run(invoke)
-    }
-
-    fun getSwitchPreference(key: String, invoke: (SwitchPreference) -> Unit) {
-        findPreference<SwitchPreference>(key)?.run(invoke)
     }
 
     fun navigate(@IdRes navigationAction: Int, options: Bundle? = null){
